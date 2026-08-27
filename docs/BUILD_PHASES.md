@@ -1,63 +1,67 @@
 # Bhasha Bridge — Build Phases
 
 ~6.5 hours of build + buffer. Each phase has an exit check — don't move on until it passes.
+Status as of 2026-08-27: backend + frontend wired, passing STUB_MODE tests. Remaining =
+live-key verification, real-mic / on-phone testing, polish, deploy, post.
 
 ---
 
 ## Hour 0 – 0.5 · Verify the one risky assumption
 
-Before any app code, confirm Sarvam Translate does **direct Tamil↔Hindi**, not a lossy trip through English.
+Confirm Sarvam Translate does **direct** translation between non-English pairs, not a lossy
+trip through English.
 
-- [ ] `pip install sarvamai`, set `SARVAM_API_KEY` in the shell.
-- [ ] Run the smoke test from `.claude/skills/sarvam-api` (§ Quick smoke test): translate a known Tamil sentence → Hindi with `model="mayura:v1"`, `mode="modern-colloquial"`.
-- [ ] Repeat Hindi → Tamil.
+- [ ] `pip install -r requirements.txt`, put a real key in `.env` (`SARVAM_API_KEY=…`, `STUB_MODE=0`).
+- [ ] Run the smoke test from `.claude/skills/sarvam-api` (§ Quick smoke test): Tamil → Hindi with `model="mayura:v1"`, `mode="modern-colloquial"`.
+- [ ] Repeat with a second non-English pair, e.g. Bengali → Tamil, and Hindi → Tamil.
 
-**Exit check:** both directions return natural, meaning-preserving text. If quality is poor, try `mode="formal"` or `model="sarvam-translate:v1"` and note the choice in `docs/ARCHITECTURE.md`.
-
----
-
-## Hour 0.5 – 1.5 · Backend skeleton (stubbed)
-
-- [ ] Project layout per `.claude/skills/voice-interpreter-backend` (`app/`, `static/`, `samples/`, `requirements.txt`, `.env.example`).
-- [ ] `config.py` — load env, **fail fast** if `SARVAM_API_KEY` missing.
-- [ ] `sarvam.py` — `SarvamAI` client singleton + `LANGS` map.
-- [ ] `main.py` — `POST /api/translate-turn` accepting `audio` (file) + `direction` (form), plus `load_dotenv()` and static mount.
-- [ ] Route returns a **canned** `{source_text, translated_text, audio_base64}` — `audio_base64` = base64 of a tiny beep/silent mp3 checked into `samples/`.
-- [ ] `GET /health` → `{"ok": true}`.
-
-**Exit check:** `curl -F audio=@samples/any.webm -F direction=ta_to_hi localhost:8000/api/translate-turn` returns the stub JSON with all three fields.
+**Exit check:** all directions return natural, meaning-preserving text. If quality is poor, try `mode="formal"` or `model="sarvam-translate:v1"` and note the choice (set `SARVAM_TRANSLATE_MODE` / `SARVAM_TRANSLATE_MODEL` in `.env`, no code change needed).
 
 ---
 
-## Hour 1.5 – 3 · Wire the real pipeline
+## Hour 0.5 – 1.5 · Backend skeleton — DONE
 
-Build `pipeline.py` one function at a time; keep the rest stubbed between steps.
+- [x] Project layout (`app/`, `static/`, `samples/`, `requirements.txt`, `.env.example`).
+- [x] `config.py` — loads env, **fails fast** if `SARVAM_API_KEY` missing (unless `STUB_MODE=1`). `tts_speaker_for(code)` for per-language voice override.
+- [x] `sarvam.py` — `SarvamAI` client singleton + `LANGUAGES` (the 11) + `SUPPORTED_CODES` + `language_list()`.
+- [x] `main.py` — `POST /api/translate-turn` (`audio` file + `source_lang` + `target_lang`), `GET /api/languages`, `GET /health`, `load_dotenv()`, static mount.
+- [x] `STUB_MODE=1` returns canned text + a real ~0.4s silent MP3 (no SDK import, no network).
 
-- [ ] `transcribe(audio_bytes, filename, lang_code)` → `client.speech_to_text.transcribe(file=..., model="saaras:v3", language_code=lang_code)` → `.transcript`. Empty/whitespace → raise `SttError("no_speech")`.
-- [ ] `translate(text, src, tgt)` → `client.text.translate(...)` → `.translated_text`.
-- [ ] `synthesize(text, tgt_lang)` → `client.text_to_speech.convert(..., output_audio_codec="mp3")` → `.audios[0]`.
-- [ ] Route chains all three; typed exceptions → 422 `{error, detail}` (`stt_failed` / `translate_failed` / `tts_failed`).
-- [ ] `< 1500` byte upload guard → 422 `no_speech`.
-- [ ] Record 3–4 voice notes into `samples/` (Tamil + Hindi) and test the full chain against those **before** touching a live mic.
-
-**Exit check:** each sample file → correct `source_text`, sensible `translated_text`, and `audio_base64` that decodes to a playable mp3 (`echo <b64> | base64 -d > out.mp3`).
+**Exit check (passing):**
+```
+curl -F audio=@samples/x.webm -F source_lang=ta-IN -F target_lang=hi-IN localhost:8000/api/translate-turn
+```
+returns `{source_text, translated_text, audio_base64}`. Validation: `same_language` → 400, unknown code → 400, `<1500` bytes → 422 `no_speech`.
 
 ---
 
-## Hour 3 – 4.5 · Frontend (`static/index.html`)
+## Hour 1.5 – 3 · Real pipeline — DONE (needs live-key verification)
 
-Per `.claude/skills/voice-interpreter-frontend`.
+- [x] `transcribe(audio_bytes, filename, lang_code)` → `speech_to_text.transcribe(file=…, model="saaras:v3", language_code=…)` → `.transcript`. Empty → `NoSpeechError`.
+- [x] `translate(text, src, tgt)` → `text.translate(input=…, source_language_code=…, target_language_code=…, model="mayura:v1", mode="modern-colloquial")` → `.translated_text`.
+- [x] `synthesize(text, tgt_lang)` → `text_to_speech.convert(text=…, language_code=tgt_lang, model="bulbul:v2", speaker=…, speech_sample_rate=22050, output_audio_codec="mp3")` → concat of `.audios`.
+- [x] Route chains all three; typed `PipelineError` subclasses → 422 `{error, detail}`.
+- [x] `<1500` byte upload guard → 422 `no_speech`.
+- [ ] With a live key: record 3–4 voice notes into `samples/` (a couple of language pairs) and test the full chain against files **before** live mic. Decode `audio_base64` and confirm it plays:
+      `python -c "import base64,sys;open('out.mp3','wb').write(base64.b64decode(sys.stdin.read()))"`
 
-- [ ] Title + one-line story line.
-- [ ] Two big buttons: `🎤 தமிழ் பேசு` (`ta_to_hi`) / `🎤 हिंदी बोलें` (`hi_to_ta`), ≥64px, high contrast.
-- [ ] Tap-to-start / tap-to-stop recording with `MediaRecorder`; active button pulses red, other disabled.
-- [ ] On stop → POST `FormData(audio, direction)` to `/api/translate-turn`.
-- [ ] Loading state: "Translating…" with animated dots/spinner — never a blank frozen screen (budget 3–6 s).
-- [ ] On 200: append `{source_text, translated_text}` to an in-memory turn log (scrollable, newest at bottom, auto-scroll), then autoplay `data:audio/mp3;base64,<audio_base64>`.
-- [ ] Each log turn gets a ▶ replay button.
-- [ ] `<meta viewport>`, no CDN scripts.
+**Exit check:** each sample → correct `source_text`, sensible `translated_text`, playable mp3.
 
-**Exit check:** on the laptop at `localhost:8000`, a full spoken turn each direction works end-to-end with autoplay.
+---
+
+## Hour 3 – 4.5 · Frontend (`static/index.html`) — DONE (needs real-mic test)
+
+- [x] Title + one-line story line.
+- [x] Two dropdowns ("Person A speaks" / "Person B speaks") populated from `GET /api/languages`; ⇄ swap button; selection persisted in `localStorage`; the two selects can't both be the same language.
+- [x] Two big talk buttons, labels update to the picked languages ("🎤 Speak <native>" + "<A → B>" sub-label), ≥74px, high contrast, one accent colour per person.
+- [x] Tap-to-start / tap-to-stop `MediaRecorder`; active button pulses, other + dropdowns disabled while recording/translating.
+- [x] On stop → POST `FormData(audio, source_lang, target_lang)`; button A → source=A/target=B, button B → the reverse.
+- [x] Animated "Translating…" state (budget 3–6 s).
+- [x] On 200: append `{source_text, translated_text}` to in-memory log (scroll, newest at bottom, auto-scroll), autoplay `data:audio/mp3;base64,<audio_base64>`.
+- [x] Per-turn ▶ replay button. `<meta viewport>`, no CDN scripts.
+- [x] iOS: `audio/mp4` recording fallback + first-tap autoplay unlock; ▶ replay is the fallback if autoplay is blocked.
+
+**Exit check:** on the laptop at `localhost:8000` with a live key, a full spoken turn each direction works end-to-end with autoplay, for at least two different language pairs.
 
 ---
 
@@ -65,23 +69,24 @@ Per `.claude/skills/voice-interpreter-frontend`.
 
 - [ ] Test on an **actual phone** (see Deployment for the HTTPS requirement).
 - [ ] Test with background noise (TV, street) — the real doorstep scenario, not a quiet room.
-- [ ] Latency tolerable? If not, tighten UI copy to "one short phrase at a time".
-- [ ] Failure cases don't freeze the UI:
-  - [ ] mic permission denied → "Allow microphone access, then reload."
+- [ ] Try 3–4 language pairs including a Dravidian↔Indo-Aryan one (e.g. Malayalam ↔ Marathi) and one with English.
+- [ ] Latency tolerable? If not, lean harder on the "one short phrase" copy.
+- [ ] Failure cases don't freeze the UI (all implemented — verify on device):
+  - [ ] mic permission denied → "Allow microphone access, then reload the page."
   - [ ] empty / silent recording → "Didn't catch that — tap and speak a short phrase."
-  - [ ] network / server error → "Tap to try again." (buttons stay usable)
-  - [ ] double-tap / tap while busy → ignored via `busy` flag.
-- [ ] iOS: confirm autoplay works; if blocked, the ▶ replay button is the fallback.
+  - [ ] network / server / 422 error → "Tap to try again." (buttons stay usable)
+  - [ ] tap while busy / tapping the other button mid-turn → ignored.
+- [ ] iOS: confirm autoplay works; if blocked, ▶ replay is the fallback.
 
-**Exit check:** hand the phone to someone else; they complete a two-turn conversation without instructions beyond the on-screen copy.
+**Exit check:** hand the phone to someone else; they pick a pair and complete a two-turn conversation with only the on-screen copy.
 
 ---
 
 ## Hour 5.5 – 6.5 · Polish for the demo
 
-- [ ] UI looks *intentional* — consistent spacing, one accent colour, readable fonts. Not fancy, not a raw API tester.
-- [ ] On-page description line: "Built this after my neighbour couldn't understand his Zomato delivery guy — Tamil ↔ Hindi live voice interpreter."
-- [ ] Record a **15–20 s phone/screen video**: button tap → voice in → translated voice out, repeated once. This is the social post content.
+- [ ] UI looks *intentional* — consistent spacing, readable fonts, the two accent colours doing real work. Not fancy, not a raw API tester.
+- [x] On-page description line references the neighbour / delivery-guy story.
+- [ ] Record a **15–20 s phone/screen video**: pick a pair → button tap → voice in → translated voice out, repeated once (ideally show switching the language once).
 - [ ] Draft the post (see Sharing).
 
 **Exit check:** the video alone communicates what the thing does, with no caption.
@@ -92,26 +97,27 @@ Per `.claude/skills/voice-interpreter-frontend`.
 
 Order of least friction:
 
-1. **Local + screen recording / live on a call** — zero deployment risk. This is the safe default for the demo.
+1. **Local + screen recording / live on a call** — zero deployment risk. Safe default.
 2. **Live & clickable:** one free-tier host for the FastAPI app (Render / Railway / Fly.io), static frontend served by the same app. No Docker/K8s you haven't done before.
 
 ### The HTTPS catch for on-phone testing
 
-Mobile browsers block `navigator.mediaDevices.getUserMedia` on non-HTTPS origins — **except** `http://localhost`. So testing on a physically separate phone over `http://<laptop-ip>:8000` will fail at mic access. Options:
+Mobile browsers block `navigator.mediaDevices.getUserMedia` on non-HTTPS origins — **except** `http://localhost`. Testing on a separate phone over `http://<laptop-ip>:8000` fails at mic access. Options:
 
-- Deploy to a free-tier host (gets you HTTPS for free) and test there.
+- Deploy to a free-tier host (HTTPS for free) and test there.
 - Use an HTTPS dev tunnel to the local server.
-- Or run Chrome on the phone with the laptop's origin whitelisted via `chrome://flags/#unsafely-treat-insecure-origin-as-secure` (fiddly; last resort).
+- Or whitelist the laptop origin on the phone's Chrome via `chrome://flags/#unsafely-treat-insecure-origin-as-secure` (fiddly; last resort).
 
-Set `uvicorn ... --host 0.0.0.0` regardless so the app is reachable on the LAN.
+`.claude/launch.json` already runs `uvicorn ... --host 0.0.0.0` so the app is reachable on the LAN.
 
 ### Deploy checklist
 
-- [ ] `SARVAM_API_KEY` set as a host env var (not committed).
-- [ ] `requirements.txt` complete: `fastapi uvicorn[standard] python-multipart python-dotenv sarvamai`.
+- [ ] `SARVAM_API_KEY` set as a host env var (not committed). `STUB_MODE` unset / `0`.
+- [ ] `requirements.txt`: `fastapi uvicorn[standard] python-multipart python-dotenv sarvamai`.
 - [ ] Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - [ ] Static files served by the app (single service, no separate frontend host).
-- [ ] Hit the deployed URL from a phone, run one full turn each direction.
+- [ ] Hit the deployed URL from a phone, run one full turn each direction on two pairs.
+- [ ] `GET /health` returns `{"ok": true, "stub_mode": false}`.
 - [ ] Rotate / revoke the API key after the demo window if the URL was public.
 
 ---
@@ -119,13 +125,15 @@ Set `uvicorn ... --host 0.0.0.0` regardless so the app is reachable on the LAN.
 ## Buffer · Sharing plan
 
 - **Lead with the story, not the tech:** the neighbour, the delivery guy, the moment of confusion.
-- **Video > code screenshots.** ~15–20 s: tap → voice → translated voice, once each way.
-- **State the honest scope:** "v1, Tamil↔Hindi only, built in a day." The constraint earns respect and invites "can you add my language?" comments — that's the growth loop.
+- **Video > code screenshots.** ~15–20 s: pick a pair, tap → voice → translated voice, once each way.
+- **State the honest scope:** "11 Indian languages, turn-based, built in a day." The constraint earns respect and the picker invites "add my language / my dialect" comments — that's the growth loop.
 - Post copy draft:
-  > Built this after my neighbour couldn't understand his Zomato delivery guy. Tamil ↔ Hindi live voice interpreter — you talk, it speaks back in the other language. v1, one language pair, built in a day. Video below.
+  > Built this after my neighbour couldn't understand his Zomato delivery guy. A live voice interpreter for 11 Indian languages — pick two, talk, and it speaks back in the other. Turn-based, no app install, built in a day. Video below.
 
 ---
 
 ## Scope guard (re-read mid-build)
 
-If you're tempted to add any of these, stop: language selector, auto-detect, streaming, a database, accounts, dialect handling, a second endpoint, Docker. All explicitly cut — see [PROJECT_UNDERSTANDING.md](PROJECT_UNDERSTANDING.md#explicitly-cut-from-v1-do-not-scope-creep-mid-build).
+Still cut — if tempted, stop: the non-TTS languages, auto-detect, streaming, a database,
+accounts, dialect handling, extra endpoints, Docker. See
+[PROJECT_UNDERSTANDING.md](PROJECT_UNDERSTANDING.md#explicitly-cut-from-v1).

@@ -101,13 +101,18 @@ translated = resp.translated_text
 ```python
 resp = client.text_to_speech.convert(
     text=translated,
-    target_language_code="hi-IN",     # NOTE: param name is target_language_code here
+    language_code="hi-IN",            # SDK param name is `language_code` (REST body uses this too);
+                                     # it means the OUTPUT language
     model="bulbul:v2",                # "bulbul:v3" or "bulbul:v2"
     speaker="anushka",                # must be valid for the chosen model (see below)
     speech_sample_rate=22050,
     output_audio_codec="mp3",         # mp3 plays everywhere in an <audio> tag
 )
 audio_b64 = resp.audios[0]            # base64 string, NOT a data URI
+
+# Verified against sarvamai==0.1.31: transcribe(file=, model=, language_code=),
+# text.translate(input=, source_language_code=, target_language_code=, model=, mode=),
+# text_to_speech.convert(text=, language_code=, model=, speaker=, speech_sample_rate=, output_audio_codec=)
 ```
 
 - **Supported `target_language_code`:** `bn-IN, en-IN, gu-IN, hi-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN`. Both `hi-IN` and `ta-IN` covered.
@@ -115,7 +120,7 @@ audio_b64 = resp.audios[0]            # base64 string, NOT a data URI
 - **Speakers must match the model:**
   - `bulbul:v2`: `anushka, manisha, vidya, arya, abhilash, karun, hitesh`
   - `bulbul:v3`: `shubh, aditya, ritu, priya, neha, rahul, pooja, rohan, simran, kavya, …` (large list; check docs)
-  - Pick one female + one male voice and keep them fixed for v1. A mismatched speaker/model pair is a common 400.
+  - bulbul speakers are **language-agnostic** — a speaker renders whatever `language_code` you pass, so one voice (default `anushka`) covers all 11 languages. A mismatched speaker/**model** pair is a common 400 (e.g. a v3-only speaker with `bulbul:v2`).
 - **`speech_sample_rate`:** one of `8000, 16000, 22050, 24000, 32000, 44100, 48000`.
 - **`output_audio_codec`:** `mp3, linear16, mulaw, alaw, opus, flac, aac, wav`. Use `mp3`.
 - **Response shape:**
@@ -134,20 +139,28 @@ audioEl.play();
 
 ---
 
-## Language-code map (the whole "direction" switch)
+## Which languages the interpreter offers — TTS is the limiter
 
-| direction   | STT `language_code` | Translate src → tgt | TTS `target_language_code` | on-screen labels |
-|-------------|---------------------|---------------------|----------------------------|------------------|
-| `ta_to_hi`  | `ta-IN`             | `ta-IN` → `hi-IN`   | `hi-IN`                    | source = Tamil, output = Hindi |
-| `hi_to_ta`  | `hi-IN`             | `hi-IN` → `ta-IN`   | `ta-IN`                    | source = Hindi, output = Tamil |
+The three services don't cover the same set:
 
-Implement this as one dict in the backend, not two code paths:
-```python
-LANGS = {
-    "ta_to_hi": {"stt": "ta-IN", "src": "ta-IN", "tgt": "hi-IN"},
-    "hi_to_ta": {"stt": "hi-IN", "src": "hi-IN", "tgt": "ta-IN"},
-}
-```
+| Service | Coverage |
+|---|---|
+| STT `language_code` | ~22 (`unknown` + 22 codes) |
+| Translate `source/target_language_code` | ~22 (+ `auto`) |
+| **TTS `language_code`** | **11 only:** `bn-IN, en-IN, gu-IN, hi-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN` |
+
+A voice interpreter must speak the output, so the usable set is the **TTS list** — the
+11 languages with STT ∩ Translate ∩ TTS. Bhasha Bridge offers exactly these 11 in both
+dropdowns, so every pair works both ways with text + audio.
+
+Codes are BCP-47 `xx-IN`. Note **Odia is `od-IN`** (not `or-IN`). No `direction` flag —
+the request carries `source_lang` + `target_lang` directly; the frontend enforces
+`source_lang != target_lang` and the backend rejects anything outside the 11-set
+(`400 bad_language` / `400 same_language`).
+
+Per turn: `transcribe(language_code=source_lang)` → `translate(source_lang → target_lang)`
+→ `convert(language_code=target_lang)`. All three take the same code list above; only the
+11 TTS ones are ever passed because that's all the UI exposes.
 
 ## Failure modes to handle
 
