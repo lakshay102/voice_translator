@@ -54,7 +54,7 @@ returns `{source_text, translated_text, audio_base64}`. Validation: `same_langua
 - [x] Title + one-line story line.
 - [x] Two dropdowns ("Person A speaks" / "Person B speaks") populated from `GET /api/languages`; ⇄ swap button; selection persisted in `localStorage`; the two selects can't both be the same language.
 - [x] Two big talk buttons, labels update to the picked languages ("🎤 Speak <native>" + "<A → B>" sub-label), ≥74px, high contrast, one accent colour per person.
-- [x] Tap-to-start / tap-to-stop `MediaRecorder`; active button pulses, other + dropdowns disabled while recording/translating.
+- [x] **Hold-to-talk** (walkie-talkie): `pointerdown` records, release (anywhere) sends. Pointer-capture + `window` pointerup/blur safety net; `MIN_HOLD_MS` + tiny-blob guard for accidental taps. Mic stream acquired once and kept for instant re-arm. `resetIdle()` on every completion path so turn 2+ always works.
 - [x] On stop → POST `FormData(audio, source_lang, target_lang)`; button A → source=A/target=B, button B → the reverse.
 - [x] Animated "Translating…" state (budget 3–6 s).
 - [x] On 200: append `{source_text, translated_text}` to in-memory log (scroll, newest at bottom, auto-scroll), autoplay `data:audio/mp3;base64,<audio_base64>`.
@@ -75,7 +75,9 @@ returns `{source_text, translated_text, audio_base64}`. Validation: `same_langua
   - [ ] mic permission denied → "Allow microphone access, then reload the page."
   - [ ] empty / silent recording → "Didn't catch that — tap and speak a short phrase."
   - [ ] network / server / 422 error → "Tap to try again." (buttons stay usable)
-  - [ ] tap while busy / tapping the other button mid-turn → ignored.
+  - [ ] quick accidental tap (< 350 ms) → discarded, not sent.
+  - [ ] holding the other button mid-turn → ignored.
+  - [ ] second and third turns work (regression guard — an earlier tap version blocked turn 2).
 - [ ] iOS: confirm autoplay works; if blocked, ▶ replay is the fallback.
 
 **Exit check:** hand the phone to someone else; they pick a pair and complete a two-turn conversation with only the on-screen copy.

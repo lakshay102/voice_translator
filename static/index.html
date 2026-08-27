@@ -127,7 +127,11 @@
     flex: 1; border: none; border-radius: 16px; padding: 18px 8px;
     font-size: 1.05rem; font-weight: 700; color: #fff; cursor: pointer;
     transition: transform .08s, filter .15s, opacity .15s; line-height: 1.3; min-height: 74px;
+    touch-action: none;              /* hold-to-talk: don't scroll/zoom from the button */
+    -webkit-touch-callout: none;     /* no iOS long-press callout */
+    -webkit-user-select: none; user-select: none;
   }
+  .talk.recording { transform: scale(1.02); }
   .talk small { display: block; font-weight: 500; font-size: .7rem; opacity: .85; margin-top: 3px; }
   .talk.a { background: var(--a); }
   .talk.b { background: var(--b); }
@@ -145,7 +149,7 @@
 <div class="app">
   <header>
     <h1>Bhasha Bridge</h1>
-    <p>Live voice interpreter. Pick two languages, tap to talk, hear it back in the other.
+    <p>Live voice interpreter. Pick two languages, hold to talk, hear it back in the other.
        Built after my neighbour couldn't understand his Zomato delivery guy.</p>
   </header>
 
@@ -162,7 +166,7 @@
   </div>
 
   <div id="log" aria-live="polite">
-    <div class="empty">Tap a button, speak, tap again to stop.<br />The other language plays back.</div>
+    <div class="empty">Hold a button, speak, release.<br />The other language plays back.</div>
   </div>
 
   <div id="status">Loading languages…</div>
@@ -172,7 +176,7 @@
     <button class="talk b" id="btn-b" disabled>🎤 <span class="lbl">Person B</span><small></small></button>
   </div>
 
-  <footer>Turn-based · voice + text both ways · nothing is saved</footer>
+  <footer>Hold to talk · release to translate · nothing is saved</footer>
 </div>
 
 <script>
@@ -220,6 +224,7 @@
     setBusy(false);
     btnA.classList.remove("recording");
     btnB.classList.remove("recording");
+    holdSide = null;
     activeSide = null;
   }
 
@@ -277,42 +282,97 @@
     audioUnlocked = true;
   }
 
-  async function startRecording(side) {
-    unlockAudio();
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e) {
-      return fail("Allow microphone access, then reload the page.");
-    }
+  // ---- Hold-to-talk ------------------------------------------------------
+  // Hold a button to record, release (anywhere) to send. The mic stream is
+  // acquired once and kept, so every turn after the first re-arms instantly.
+  let holdSide = null;    // button currently held
+  let sendSide = null;    // side the in-flight turn belongs to
+  let micStream = null;
+  let recStartAt = 0;
+  const MIN_HOLD_MS = 350;
 
-    chunks = [];
-    let mime = "";
-    if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
-    else if (MediaRecorder.isTypeSupported("audio/webm")) mime = "audio/webm";
-    else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
+  async function getMicStream() {
+    if (micStream && micStream.active) return micStream;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return micStream;
+  }
 
-    mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    mediaRecorder.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const type = mediaRecorder.mimeType || mime || "audio/webm";
-      sendTurn(new Blob(chunks, { type }), side);
-    };
-    mediaRecorder.start();
+  function pickMime() {
+    if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+    if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+    if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+    return "";
+  }
 
-    activeSide = side;
+  function armUI(side) {
     (side === "a" ? btnA : btnB).classList.add("recording");
     (side === "a" ? btnB : btnA).disabled = true;
     selA.disabled = selB.disabled = swapBtn.disabled = true;
-    setStatus("Recording… tap again to translate");
   }
 
-  function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    if (activeSide) (activeSide === "a" ? btnA : btnB).classList.remove("recording");
+  function resetIdle() {
+    btnA.classList.remove("recording");
+    btnB.classList.remove("recording");
+    btnA.disabled = btnB.disabled = false;
+    selA.disabled = selB.disabled = swapBtn.disabled = false;
+    holdSide = null;
+    activeSide = null;
+  }
+
+  async function beginHold(side, ev) {
+    if (ev && ev.cancelable) ev.preventDefault();
+    if (busy || holdSide || activeSide) return;
+    unlockAudio();
+    holdSide = side;
+    armUI(side);
+    setStatus("Recording… release to translate");
+
+    let stream;
+    try {
+      stream = await getMicStream();
+    } catch (e) {
+      holdSide = null;
+      resetIdle();
+      return fail("Allow microphone access, then reload the page.");
+    }
+    if (holdSide !== side) return;   // released before the mic was ready
+
+    chunks = [];
+    const mime = pickMime();
+    mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = onRecStop;
+    recStartAt = Date.now();
+    mediaRecorder.start();
+    activeSide = side;
+  }
+
+  function endHold(ev) {
+    if (!holdSide) return;
+    if (ev && ev.cancelable) ev.preventDefault();
+    sendSide = holdSide;
+    holdSide = null;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();               // -> onRecStop
+    } else {
+      resetIdle();
+      setStatus("Hold the button while you speak");
+    }
+  }
+
+  function onRecStop() {
+    btnA.classList.remove("recording");
+    btnB.classList.remove("recording");
+    const type = (mediaRecorder && mediaRecorder.mimeType) || pickMime() || "audio/webm";
+    const blob = new Blob(chunks, { type });
+    if (Date.now() - recStartAt < MIN_HOLD_MS || blob.size < 1200) {
+      resetIdle();
+      setStatus("Hold a little longer and speak");
+      return;
+    }
     setStatus("Translating", false, true);
     setBusy(true);
+    sendTurn(blob, sendSide);
   }
 
   async function sendTurn(blob, side) {
@@ -331,19 +391,20 @@
         const j = await res.json().catch(() => ({}));
         return fail(
           j.error === "no_speech"
-            ? "Didn't catch that — tap and speak a short phrase."
-            : "Translation failed. Tap to try again."
+            ? "Didn't catch that — hold and speak a short phrase."
+            : "Translation failed. Hold to try again."
         );
       }
-      if (!res.ok) return fail("Server problem. Tap to try again.");
+      if (!res.ok) return fail("Server problem. Hold to try again.");
 
       const data = await res.json();
       appendTurn(side, source_lang, target_lang, data.source_text, data.translated_text, data.audio_base64);
       playAudio(data.audio_base64);
-      setStatus("Ready");
+      resetIdle();
       setBusy(false);
+      setStatus("Ready — hold a button to reply");
     } catch (e) {
-      fail("No connection. Tap to try again.");
+      fail("No connection. Try again.");
     }
   }
 
@@ -373,13 +434,21 @@
     player.play().catch(() => setStatus("Tap ▶ replay to hear it"));
   }
 
-  function onTap(side) {
-    if (activeSide === side) return stopRecording();
-    if (activeSide || busy) return;
-    startRecording(side);
+  for (const [side, btn] of [["a", btnA], ["b", btnB]]) {
+    btn.addEventListener("pointerdown", (e) => {
+      if (btn.setPointerCapture) { try { btn.setPointerCapture(e.pointerId); } catch (_) {} }
+      beginHold(side, e);
+    });
+    btn.addEventListener("pointerup", endHold);
+    btn.addEventListener("pointercancel", endHold);
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
   }
-  btnA.addEventListener("click", () => onTap("a"));
-  btnB.addEventListener("click", () => onTap("b"));
+  // Safety net: a release that somehow lands off the button still ends the turn.
+  window.addEventListener("pointerup", (e) => { if (holdSide) endHold(e); });
+  window.addEventListener("blur", () => { if (holdSide) endHold(); });
+  window.addEventListener("pagehide", () => {
+    if (micStream) micStream.getTracks().forEach((t) => t.stop());
+  });
 
   // Boot: feature-check, then load the language list from the server.
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {

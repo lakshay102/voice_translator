@@ -20,8 +20,9 @@ HTML/JS, no build step, one `static/index.html`.
 3. **Turn log** — scrollable, newest at bottom, auto-scroll. Each entry: a
    `<srcNative> → <tgtNative>` tag, the source text, the translated text, a ▶ replay button.
 4. **Two big talk buttons** (one accent colour per person). Labels are **dynamic**:
-   `🎤 Speak <native>` with a `<A → B>` sub-label. ≥74px tall, high contrast.
-5. **Status line**: `Ready` / `Recording… tap again to translate` / `Translating…` / error.
+   `🎤 Speak <native>` with a `<A → B>` sub-label. ≥74px tall, high contrast. **Hold to talk.**
+5. **Status line**: `Ready — hold a button to reply` / `Recording… release to translate` /
+   `Translating…` / error.
 
 ## Language picker
 
@@ -43,33 +44,53 @@ fetch("/api/languages").then(r => r.json()).then(d => populate(d.languages));
 Button A pressed → `source_lang = selA.value`, `target_lang = selB.value`.
 Button B pressed → the reverse. That's the whole "direction" logic — no flag.
 
-## Recording model
+## Recording model — hold-to-talk (walkie-talkie)
 
-**Tap-to-start / tap-to-stop** (more reliable on mobile than press-and-hold).
+**Hold a button to record, release (anywhere) to send.** One gesture, no second tap,
+natural when passing the phone. Implemented with Pointer Events.
 
-- While recording: active button pulses, the other button **and both dropdowns and the
-  swap button** are disabled.
-- On stop: "Translating…" (animated dots), everything disabled, POST the blob.
-- On response: re-enable, append to log, autoplay audio.
-- `busy` / `activeSide` flags guard against double-taps and cross-taps.
+- `pointerdown` on a button → `beginHold(side)`: arm UI, then `getMicStream()`.
+- `pointerup` / `pointercancel` (on the button, captured via `setPointerCapture`) → `endHold()`:
+  `mediaRecorder.stop()` → `onRecStop` builds the blob and POSTs it.
+- Also a `window` `pointerup` + `blur` safety net so a release off the button still ends the turn.
+- **Guards:** `MIN_HOLD_MS = 350` and `blob.size < 1200` → treat as an accidental tap,
+  discard, show "Hold a little longer and speak". `busy` blocks a new hold while translating.
+  If the button is released *before* `getUserMedia` resolves (first-run permission prompt),
+  the pending `beginHold` bails on `holdSide !== side`.
+- **State:** `holdSide` (button held now), `activeSide` (recording in progress),
+  `sendSide` (turn in flight), `busy` (translating). `resetIdle()` clears all of them and
+  re-enables both buttons + both selects + swap — call it on **every** completion path
+  (success *and* failure) so a second turn always works.
+- CSS on `.talk`: `touch-action: none; -webkit-touch-callout: none; user-select: none;` and
+  `contextmenu` is `preventDefault`-ed, so a long hold doesn't scroll, zoom, select text, or
+  pop the iOS callout.
 
-## MediaRecorder capture
+### Mic stream is acquired once and kept
+
+`getMicStream()` caches the `MediaStream` (`micStream`); it is **not** stopped between turns,
+so every turn after the first re-arms instantly (no re-acquire latency, no permission
+re-flash). Tracks are stopped only on `pagehide`. A fresh `MediaRecorder` is built from the
+same stream each turn. The mic-in-use indicator staying on is expected for a dedicated
+interpreter page.
 
 ```js
-let mime = "";
-if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mime = "audio/webm;codecs=opus";
-else if (MediaRecorder.isTypeSupported("audio/webm"))        mime = "audio/webm";
-else if (MediaRecorder.isTypeSupported("audio/mp4"))         mime = "audio/mp4";   // iOS/Safari
-
-const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-rec.onstop = () => {
-  stream.getTracks().forEach(t => t.stop());              // release the mic light
-  sendTurn(new Blob(chunks, { type: rec.mimeType || mime || "audio/webm" }), side);
-};
-rec.start();
+async function getMicStream() {
+  if (micStream && micStream.active) return micStream;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return micStream;
+}
+function pickMime() {
+  if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+  if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+  if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";   // iOS/Safari
+  return "";
+}
 ```
+
+> Note: an earlier tap-to-start/tap-to-stop version had a bug — `activeSide` was never
+> cleared after a completed turn, so the *other* person's button was permanently blocked
+> (`if (activeSide || busy) return;`). Hold-to-talk + `resetIdle()` on every path fixes it.
+> If you refactor, keep the "reset all turn state on completion" invariant.
 
 ## Upload
 
@@ -79,8 +100,8 @@ fd.append("audio", blob, `turn.${blob.type.includes("mp4") ? "m4a" : "webm"}`);
 fd.append("source_lang", side === "a" ? selA.value : selB.value);
 fd.append("target_lang", side === "a" ? selB.value : selA.value);
 const res = await fetch("/api/translate-turn", { method: "POST", body: fd });
-// 422 -> {error}: "no_speech" => "Didn't catch that…"; else => "Translation failed. Tap to try again."
-// !ok -> "Server problem. Tap to try again."
+// 422 -> {error}: "no_speech" => "Didn't catch that — hold and speak…"; else => "Translation failed. Hold to try again."
+// !ok -> "Server problem. Hold to try again."
 // 200 -> {source_text, translated_text, audio_base64}
 ```
 
@@ -92,10 +113,10 @@ player.src = "data:audio/mp3;base64," + audio_base64;
 player.play().catch(() => setStatus("Tap ▶ replay to hear it"));
 ```
 
-- **iOS autoplay:** priming needed. On the first button tap call `unlockAudio()` — set
-  `player.src` to a tiny silent data URI, `play()` then `pause()` inside the gesture.
-  After that, post-`fetch` playback works. Every log turn also has a ▶ replay button as
-  the fallback.
+- **iOS autoplay:** priming needed. `beginHold` calls `unlockAudio()` on the first
+  `pointerdown` — set `player.src` to a tiny silent data URI, `play()` then `pause()`
+  inside the gesture. After that, post-`fetch` playback works. Every log turn also has a
+  ▶ replay button as the fallback.
 
 ## Failure cases (never freeze the UI)
 
@@ -104,9 +125,11 @@ player.play().catch(() => setStatus("Tap ▶ replay to hear it"));
 | mic permission denied | `getUserMedia` rejects → "Allow microphone access, then reload the page." |
 | no `MediaRecorder` / old browser | feature-check on load → disable buttons, plain message |
 | `/api/languages` fails | "Couldn't load languages. Reload the page." |
-| empty / silent recording | backend 422 `no_speech` → "Didn't catch that — tap and speak a short phrase." |
-| network / server error | "Tap to try again." — buttons stay usable |
-| double-tap / tap other button mid-turn | ignored via `busy` / `activeSide` |
+| empty / silent recording | backend 422 `no_speech` → "Didn't catch that — hold and speak a short phrase." |
+| accidental quick tap (`< 350 ms` / tiny blob) | discarded in `onRecStop`, "Hold a little longer and speak" |
+| release lands off the button | `window` `pointerup` / `blur` safety net still ends the turn |
+| network / server error | "Hold to try again." — buttons stay usable |
+| hold other button mid-turn | ignored via `busy` / `holdSide` / `activeSide` |
 
 ## Mobile / UX notes
 
