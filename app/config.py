@@ -18,12 +18,14 @@ class Settings:
         self.stt_model: str = os.environ.get("SARVAM_STT_MODEL", "saaras:v3").strip()
         self.translate_model: str = os.environ.get("SARVAM_TRANSLATE_MODEL", "mayura:v1").strip()
         self.translate_mode: str = os.environ.get("SARVAM_TRANSLATE_MODE", "modern-colloquial").strip()
-        self.tts_model: str = os.environ.get("SARVAM_TTS_MODEL", "bulbul:v2").strip()
+        self.tts_model: str = os.environ.get("SARVAM_TTS_MODEL", "bulbul:v3").strip()
 
         # bulbul speakers are language-agnostic (they speak whatever language_code
         # you pass), so one voice covers all 11 languages. Override per-language
         # with SARVAM_TTS_SPEAKER_<CODE>, e.g. SARVAM_TTS_SPEAKER_TA=vidya.
-        self.tts_speaker_default: str = os.environ.get("SARVAM_TTS_SPEAKER", "anushka").strip()
+        # NOTE: speaker must match the model — anushka is bulbul:v2 only; v3 uses
+        # its own voice set (priya, ritu, neha, aditya, rahul, ...).
+        self.tts_speaker_default: str = os.environ.get("SARVAM_TTS_SPEAKER", "priya").strip()
         self.tts_sample_rate: int = int(os.environ.get("SARVAM_TTS_SAMPLE_RATE", "22050"))
 
     def tts_speaker_for(self, lang_code: str) -> str:
