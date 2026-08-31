@@ -257,7 +257,7 @@
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
     const codes = list.map((l) => l.code);
-    selA.value = (saved && codes.includes(saved.a)) ? saved.a : (codes.includes("ta-IN") ? "ta-IN" : codes[0]);
+    selA.value = (saved && codes.includes(saved.a)) ? saved.a : (codes.includes("en-IN") ? "en-IN" : codes[0]);
     selB.value = (saved && codes.includes(saved.b) && saved.b !== selA.value)
       ? saved.b
       : (codes.includes("hi-IN") && selA.value !== "hi-IN" ? "hi-IN" : codes.find((c) => c !== selA.value));

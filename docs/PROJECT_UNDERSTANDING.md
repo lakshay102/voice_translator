@@ -8,7 +8,7 @@ Full translation apps are heavy for this: they assume typing, a shared screen,
 or a back-and-forth chat UI.
 
 **Bhasha Bridge** is a turn-based voice interpreter for that moment: pick two
-languages, speak into your phone, hear it back in the other language. Tamil ↔
+languages, speak into your phone, hear it back in the other language. English ↔
 Hindi is the default pair; the picker covers **11 Indian languages**.
 
 ## What "done" looks like by tomorrow
