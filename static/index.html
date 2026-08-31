@@ -2,242 +2,555 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Bhasha Bridge — live voice interpreter</title>
+<meta name="theme-color" content="#0B0810" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Tamil:wght@400;600&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0f1220;
-    --panel: #181c2e;
-    --panel-2: #1f2438;
-    --text: #eef1f8;
-    --muted: #9aa3c0;
-    --a: #e8734a;       /* person A accent */
-    --b: #3f9d6d;       /* person B accent */
-    --border: #2b3150;
-    --danger: #e5546b;
+    --ink:      #F5EDE1;
+    --ink-2:    #C4BBCE;
+    --muted:    #8E8598;
+    --muted-2:  #6E6579;
+    --a:        #FF6B35;   /* person A */
+    --a-lite:   #FF8A5B;
+    --a-hint:   #FFB79A;
+    --a-bars:   #FFD8C7;
+    --b:        #38BDF8;   /* person B */
+    --b-lite:   #63C8F5;
+    --b-hint:   #9BD9F7;
+    --b-bars:   #CFEBFB;
+    --danger:   #E0343C;
+    --ok:       #3ED598;
+    --sans:     'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --indic:    'Noto Sans Devanagari', 'Noto Sans Tamil', 'Instrument Sans', system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+    background: #0E0B12;
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @keyframes bb-pulse   { 0% { transform: scale(1); opacity: .55 } 70% { transform: scale(1.9); opacity: 0 } 100% { opacity: 0 } }
+  @keyframes bb-bars    { 0%, 100% { transform: scaleY(.25) } 50% { transform: scaleY(1) } }
+  @keyframes bb-shimmer { 0% { background-position: -220% 0 } 100% { background-position: 220% 0 } }
+  @keyframes bb-rise    { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
+  @keyframes bb-orbit   { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+
+  /* ---- shell + card ---------------------------------------------------- */
+  .shell {
+    min-height: 100vh;
     min-height: 100dvh;
+    background: radial-gradient(120% 80% at 50% -10%, #241A2E 0%, #120E18 45%, #0B0810 100%);
     display: flex;
     justify-content: center;
+    align-items: stretch;
+    padding: 0;
   }
-  .app {
+  .card {
     width: 100%;
-    max-width: 520px;
+    max-width: 430px;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    border: 1px solid rgba(255,255,255,.05);
     display: flex;
     flex-direction: column;
-    min-height: 100dvh;
-    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 40%);
   }
-  header { text-align: center; padding: 8px 4px 12px; }
-  header h1 { font-size: 1.25rem; margin: 0 0 4px; letter-spacing: .2px; }
-  header p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.4; }
+  @media (min-width: 760px) {
+    .shell { align-items: center; padding: 40px 24px; }
+    .card {
+      height: min(880px, calc(100vh - 80px));
+      border-radius: 38px;
+      border-color: rgba(255,255,255,.09);
+      box-shadow: 0 50px 120px -40px rgba(0,0,0,.95), 0 0 0 10px rgba(255,255,255,.02);
+    }
+  }
 
-  .pickers {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    padding: 4px 0 12px;
+  /* ---- top bar --------------------------------------------------------- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 22px 10px;
   }
-  .picker { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .picker label {
-    font-size: .66rem; text-transform: uppercase; letter-spacing: .6px;
-    color: var(--muted); font-weight: 700;
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .mark {
+    width: 34px; height: 34px; border-radius: 11px; flex: none;
+    background: linear-gradient(145deg, var(--a), var(--danger));
+    display: grid; place-items: center;
+    box-shadow: 0 6px 18px rgba(255,107,53,.35);
   }
-  .picker.a label { color: var(--a); }
-  .picker.b label { color: var(--b); }
-  select {
-    width: 100%;
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 8px;
-    font-size: .95rem;
-    appearance: none;
+  .mark i {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 2.5px solid #fff; border-right-color: transparent;
   }
-  #swap {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 1rem;
-    cursor: pointer;
-    line-height: 1;
-    margin-bottom: 1px;
-  }
-  #swap:active { transform: scale(.94); }
-
-  #log {
-    flex: 1;
-    overflow-y: auto;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 160px;
-  }
-  #log .empty {
-    margin: auto; color: var(--muted); font-size: .85rem;
-    text-align: center; padding: 24px 12px;
-  }
-  .turn {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--tag, var(--muted));
-    border-radius: 10px;
-    padding: 10px 12px;
-  }
-  .turn .tag {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .6px;
-    color: var(--tag, var(--muted)); font-weight: 700; margin-bottom: 4px;
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  }
-  .turn .src { color: var(--muted); font-size: .9rem; margin: 2px 0; }
-  .turn .dst { font-size: 1.05rem; font-weight: 600; margin: 2px 0; }
-  .turn.from-a { --tag: var(--a); }
-  .turn.from-b { --tag: var(--b); }
-  .replay {
-    background: transparent; border: 1px solid var(--border); color: var(--muted);
-    border-radius: 999px; font-size: .7rem; padding: 2px 9px; cursor: pointer; flex: none;
-  }
-  .replay:active { transform: scale(.96); }
-
+  .brand-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .brand-name { font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
   #status {
-    text-align: center; font-size: .82rem; color: var(--muted);
-    min-height: 1.2em; padding: 12px 4px 8px;
+    font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #status.error { color: var(--danger); }
-  #status .dots::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
-  @keyframes dots {
-    0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; }
+  .pill {
+    display: flex; align-items: center; gap: 7px; flex: none;
+    padding: 7px 11px; border-radius: 999px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07);
+    font-size: 11px; font-weight: 600; color: #A9A0B4;
+  }
+  .pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ok); box-shadow: 0 0 8px var(--ok);
   }
 
-  .buttons { display: flex; gap: 12px; padding-bottom: 8px; }
+  /* ---- language pickers ------------------------------------------------ */
+  .pickers { display: flex; align-items: center; gap: 10px; padding: 10px 22px 16px; }
+  .picker {
+    flex: 1; min-width: 0; position: relative;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 12px 13px; border-radius: 16px;
+    cursor: pointer;
+    transition: all .18s cubic-bezier(.2,.8,.2,1);
+  }
+  .picker.a { background: rgba(255,107,53,.09); border: 1px solid rgba(255,107,53,.22); }
+  .picker.b { background: rgba(56,189,248,.09); border: 1px solid rgba(56,189,248,.22); }
+  .picker.a:hover { background: rgba(255,107,53,.16); border-color: rgba(255,107,53,.45); transform: translateY(-2px); }
+  .picker.b:hover { background: rgba(56,189,248,.16); border-color: rgba(56,189,248,.45); transform: translateY(-2px); }
+  .picker:focus-within { outline: 2px solid rgba(255,255,255,.35); outline-offset: 2px; }
+  .picker.is-disabled { opacity: .5; pointer-events: none; }
+  .kicker {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+  }
+  .picker.a .kicker { color: var(--a-lite); }
+  .picker.b .kicker { color: var(--b-lite); }
+  .picker-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .picker-name { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .picker-native { font-size: 12px; color: #B7ADC2; font-family: var(--indic); }
+  /* the real <select> sits invisibly over the card, so a tap opens the native picker */
+  .picker select {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: 0; padding: 0; margin: 0;
+    appearance: none; -webkit-appearance: none;
+    font-size: 16px; cursor: pointer;
+  }
+  .swap {
+    width: 34px; height: 34px; flex: none; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    font-size: 14px; color: #C9C0D4; cursor: pointer;
+    transition: all .2s ease;
+    font-family: inherit; padding: 0;
+  }
+  .swap:hover:not(:disabled) { background: rgba(255,255,255,.14); transform: rotate(180deg); color: #fff; }
+  .swap:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ---- conversation stream --------------------------------------------- */
+  .stream {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 4px 18px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.14) transparent;
+  }
+  .stream::-webkit-scrollbar { width: 6px; }
+  .stream::-webkit-scrollbar-track { background: transparent; }
+  .stream::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.14); border-radius: 999px;
+  }
+  .stream::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.24); }
+  .empty {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 18px 22px; text-align: center;
+  }
+  .empty[hidden] { display: none; }
+  .empty-icon {
+    width: 56px; height: 56px; flex: none; border-radius: 20px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    display: grid; place-items: center; font-size: 22px;
+  }
+  .empty-title { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+  .empty-body {
+    font-size: 13.5px; line-height: 1.55; color: var(--muted);
+    max-width: 250px; text-wrap: pretty;
+  }
+  .empty-body em { color: #B7ADC2; font-style: normal; font-weight: 600; }
+
+  .turn {
+    display: flex; flex-direction: column; gap: 8px;
+    animation: bb-rise .34s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .turn-head { display: flex; align-items: center; gap: 8px; padding-left: 2px; }
+  .turn-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .turn.from-a .turn-dot { background: var(--a); }
+  .turn.from-b .turn-dot { background: var(--b); }
+  .turn-meta {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: #7E7589;
+  }
+  .bubble-src {
+    padding: 13px 15px; border-radius: 18px 18px 18px 6px;
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.06);
+    font-size: 14.5px; line-height: 1.5; color: var(--ink-2);
+    font-family: var(--indic);
+  }
+  .bubble-dst {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 15px 16px; border-radius: 6px 18px 18px 18px;
+    box-shadow: 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+  /* the reply is spoken in the OTHER person's language, so it carries their colour */
+  .turn.from-a .bubble-dst {
+    background: linear-gradient(150deg, rgba(56,189,248,.16), rgba(37,99,235,.09));
+    border: 1px solid rgba(56,189,248,.3);
+  }
+  .turn.from-b .bubble-dst {
+    background: linear-gradient(150deg, rgba(255,107,53,.16), rgba(212,46,78,.09));
+    border: 1px solid rgba(255,107,53,.3);
+  }
+  .dst-text {
+    font-size: 17px; line-height: 1.45; font-weight: 500; letter-spacing: -.01em;
+    color: #F7F1E8; font-family: var(--indic); text-wrap: pretty;
+  }
+  .dst-actions { display: flex; align-items: center; gap: 8px; }
+  .play {
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 12px 7px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+    font-size: 11.5px; font-weight: 600; color: #EFE7DC;
+    font-family: inherit; cursor: pointer;
+    transition: all .16s ease;
+  }
+  .play:hover { background: rgba(255,255,255,.18); transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(0,0,0,.8); }
+  .eq { display: flex; align-items: flex-end; gap: 2.5px; height: 14px; opacity: .5; }
+  .eq i {
+    width: 2.5px; height: 100%; border-radius: 2px; background: var(--ink);
+    transform-origin: bottom;
+  }
+  .eq i:nth-child(1) { transform: scaleY(.4); }
+  .eq i:nth-child(2) { transform: scaleY(.8); }
+  .eq i:nth-child(3) { transform: scaleY(.55); }
+  .eq i:nth-child(4) { transform: scaleY(1); }
+  .eq i:nth-child(5) { transform: scaleY(.35); }
+
+  .translating {
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 16px; border-radius: 18px;
+    background: linear-gradient(100deg, rgba(255,255,255,.04), rgba(255,255,255,.09), rgba(255,255,255,.04));
+    background-size: 220% 100%;
+    animation: bb-shimmer 1.5s linear infinite;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  .translating[hidden] { display: none; }
+  .spinner {
+    width: 20px; height: 20px; flex: none; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.18); border-top-color: var(--a-lite);
+    animation: bb-orbit .8s linear infinite;
+  }
+  .translating span { font-size: 13.5px; font-weight: 600; color: #D6CDE0; white-space: nowrap; }
+
+  .errbar {
+    display: flex; align-items: center; gap: 11px;
+    padding: 13px 15px; border-radius: 16px;
+    background: rgba(224,52,60,.12); border: 1px solid rgba(224,52,60,.32);
+    font-size: 13px; font-weight: 500; color: #FFC2BC;
+  }
+  .errbar[hidden] { display: none; }
+  .errbar i { font-size: 15px; font-style: normal; flex: none; }
+
+  /* ---- dock ------------------------------------------------------------ */
+  .dock {
+    position: sticky; bottom: 0; flex: none;
+    padding: 16px 18px 26px;
+    padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(11,8,16,0), rgba(11,8,16,.92) 32%, #0B0810);
+    border-top: 1px solid rgba(255,255,255,.05);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .talk-row { display: flex; gap: 12px; }
   .talk {
-    flex: 1; border: none; border-radius: 16px; padding: 18px 8px;
-    font-size: 1.05rem; font-weight: 700; color: #fff; cursor: pointer;
-    transition: transform .08s, filter .15s, opacity .15s; line-height: 1.3; min-height: 74px;
-    touch-action: none;              /* hold-to-talk: don't scroll/zoom from the button */
-    -webkit-touch-callout: none;     /* no iOS long-press callout */
-    -webkit-user-select: none; user-select: none;
+    position: relative; flex: 1; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+    height: 104px; border-radius: 26px;
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; touch-action: none;
+    color: var(--ink); font-family: inherit; padding: 0;
+    box-shadow: 0 10px 26px -18px rgba(0,0,0,.9);
+    transition: transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease, background .2s ease, border-color .2s ease, opacity .2s ease;
   }
-  .talk.recording { transform: scale(1.02); }
-  .talk small { display: block; font-weight: 500; font-size: .7rem; opacity: .85; margin-top: 3px; }
-  .talk.a { background: var(--a); }
-  .talk.b { background: var(--b); }
-  .talk:active { transform: scale(.97); }
-  .talk:disabled { opacity: .4; cursor: not-allowed; }
-  .talk.recording { animation: pulse 1s ease-in-out infinite; filter: brightness(1.15); }
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); }
-    50% { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+  .talk.a { background: rgba(255,107,53,.13); border: 1.5px solid rgba(255,107,53,.3); }
+  .talk.b { background: rgba(56,189,248,.12); border: 1.5px solid rgba(56,189,248,.3); }
+  .talk.a:hover:not(:disabled) { transform: translateY(-3px) scale(1.015); box-shadow: 0 20px 42px -16px rgba(255,107,53,.6); border-color: var(--a); }
+  .talk.b:hover:not(:disabled) { transform: translateY(-3px) scale(1.015); box-shadow: 0 20px 42px -16px rgba(56,189,248,.55); border-color: var(--b); }
+  .talk:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+  .talk:disabled { opacity: .42; cursor: not-allowed; }
+  .talk.a.recording {
+    background: linear-gradient(160deg, var(--a), #D42E4E);
+    border-color: rgba(255,255,255,.5);
+    box-shadow: 0 18px 40px -14px rgba(255,107,53,.75);
   }
-  footer { text-align: center; color: var(--muted); font-size: .72rem; padding: 6px 4px 2px; }
+  .talk.b.recording {
+    background: linear-gradient(160deg, var(--b), #2563EB);
+    border-color: rgba(255,255,255,.5);
+    box-shadow: 0 18px 40px -14px rgba(56,189,248,.7);
+  }
+  .talk .ripple { display: none; position: absolute; inset: 0; border-radius: 26px; pointer-events: none; }
+  .talk.recording .ripple { display: block; animation: bb-pulse 1.5s ease-out infinite; }
+  .talk.a .ripple { border: 1.5px solid var(--a); }
+  .talk.b .ripple { border: 1.5px solid var(--b); }
+
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+  .bars i {
+    width: 3px; height: 22px; border-radius: 3px; transform-origin: bottom;
+    opacity: .35;
+  }
+  .talk.a .bars i { background: var(--a-bars); }
+  .talk.b .bars i { background: var(--b-bars); }
+  .bars i:nth-child(1) { transform: scaleY(.23); }
+  .bars i:nth-child(2) { transform: scaleY(.32); }
+  .bars i:nth-child(3) { transform: scaleY(.41); }
+  .bars i:nth-child(4) { transform: scaleY(.23); }
+  .bars i:nth-child(5) { transform: scaleY(.32); }
+  .bars i:nth-child(6) { transform: scaleY(.41); }
+  .talk.recording .bars i {
+    opacity: 1;
+    animation: bb-bars .72s ease-in-out infinite;
+  }
+  .talk.recording .bars i:nth-child(1) { animation-delay: 0s }
+  .talk.recording .bars i:nth-child(2) { animation-delay: .1s }
+  .talk.recording .bars i:nth-child(3) { animation-delay: .2s }
+  .talk.recording .bars i:nth-child(4) { animation-delay: .3s }
+  .talk.recording .bars i:nth-child(5) { animation-delay: .4s }
+  .talk.recording .bars i:nth-child(6) { animation-delay: .5s }
+
+  .talk-text { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .talk-label { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .talk-hint {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .talk.a .talk-hint { color: var(--a-hint); }
+  .talk.b .talk-hint { color: var(--b-hint); }
+
+  .dock-foot { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .dock-foot .note { font-size: 11px; font-weight: 500; color: var(--muted-2); }
+  .dock-foot .sep { width: 1px; height: 11px; background: rgba(255,255,255,.12); }
+  .clear {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    background: none; border: 0; padding: 0; font-family: inherit;
+    cursor: pointer; transition: color .15s ease;
+  }
+  .clear:hover:not(:disabled) { color: var(--a-lite); }
+  .clear:disabled { opacity: .5; cursor: not-allowed; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .turn, .talk .ripple, .translating, .spinner, .talk.recording .bars i { animation: none !important; }
+  }
 </style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <h1>Bhasha Bridge</h1>
-    <p>Real-time voice interpreter for 11 Indian languages. Choose two languages,
-       hold to speak, and hear the translation in the other.</p>
+<div class="shell">
+<div class="card">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark"><i></i></div>
+      <div class="brand-text">
+        <div class="brand-name">Bhasha Bridge</div>
+        <div id="status">Loading languages…</div>
+      </div>
+    </div>
+    <div class="pill"><span class="dot"></span><span id="lang-count">11</span>&nbsp;languages</div>
   </header>
 
   <div class="pickers">
-    <div class="picker a">
-      <label for="lang-a">Person A speaks</label>
-      <select id="lang-a"></select>
+    <div class="picker a" id="picker-a">
+      <div class="kicker">Person A</div>
+      <div class="picker-row">
+        <span class="picker-name" id="name-a">—</span>
+        <span class="picker-native" id="native-a"></span>
+      </div>
+      <select id="lang-a" aria-label="Person A's language"></select>
     </div>
-    <button id="swap" type="button" title="Swap languages" aria-label="Swap languages">⇄</button>
-    <div class="picker b">
-      <label for="lang-b">Person B speaks</label>
-      <select id="lang-b"></select>
+    <button class="swap" id="swap" type="button" title="Swap languages" aria-label="Swap languages">⇄</button>
+    <div class="picker b" id="picker-b">
+      <div class="kicker">Person B</div>
+      <div class="picker-row">
+        <span class="picker-name" id="name-b">—</span>
+        <span class="picker-native" id="native-b"></span>
+      </div>
+      <select id="lang-b" aria-label="Person B's language"></select>
     </div>
   </div>
 
-  <div id="log" aria-live="polite">
-    <div class="empty">Hold a language button, speak, then release.<br />The translation plays back automatically.</div>
+  <div class="stream" id="stream" aria-live="polite">
+    <div class="empty" id="empty">
+      <div class="empty-icon">🎙️</div>
+      <div class="empty-title">Hold a conversation</div>
+      <div class="empty-body">Hold the button for whoever is speaking, say <em>one short sentence</em>, then let go. The other person hears it in their language.</div>
+    </div>
+
+    <div class="translating" id="translating" hidden>
+      <div class="spinner"></div>
+      <span>Translating…</span>
+    </div>
+
+    <div class="errbar" id="errbar" hidden><i>⚠</i><span id="errtext"></span></div>
   </div>
 
-  <div id="status">Loading languages…</div>
-
-  <div class="buttons">
-    <button class="talk a" id="btn-a" disabled>🎤 <span class="lbl">Person A</span><small></small></button>
-    <button class="talk b" id="btn-b" disabled>🎤 <span class="lbl">Person B</span><small></small></button>
+  <div class="dock">
+    <div class="talk-row">
+      <button class="talk a" id="btn-a" type="button" disabled>
+        <span class="ripple"></span>
+        <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="talk-text">
+          <span class="talk-label" id="label-a">Speak</span>
+          <span class="talk-hint" id="hint-a">Hold to talk</span>
+        </span>
+      </button>
+      <button class="talk b" id="btn-b" type="button" disabled>
+        <span class="ripple"></span>
+        <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="talk-text">
+          <span class="talk-label" id="label-b">Speak</span>
+          <span class="talk-hint" id="hint-b">Hold to talk</span>
+        </span>
+      </button>
+    </div>
+    <div class="dock-foot">
+      <span class="note">One short sentence at a time</span>
+      <span class="sep"></span>
+      <button class="clear" id="clear" type="button" disabled>Clear conversation</button>
+    </div>
   </div>
 
-  <footer>Hold to speak · release to translate · audio is never stored</footer>
+</div>
 </div>
 
 <script>
 (() => {
   "use strict";
 
-  const logEl = document.getElementById("log");
-  const statusEl = document.getElementById("status");
-  const selA = document.getElementById("lang-a");
-  const selB = document.getElementById("lang-b");
-  const swapBtn = document.getElementById("swap");
-  const btnA = document.getElementById("btn-a");
-  const btnB = document.getElementById("btn-b");
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status"),      countEl = $("lang-count");
+  const selA = $("lang-a"),          selB = $("lang-b");
+  const pickerA = $("picker-a"),     pickerB = $("picker-b");
+  const nameA = $("name-a"),         nameB = $("name-b");
+  const nativeA = $("native-a"),     nativeB = $("native-b");
+  const swapBtn = $("swap");
+  const streamEl = $("stream"),      emptyEl = $("empty");
+  const translatingEl = $("translating");
+  const errbarEl = $("errbar"),      errtextEl = $("errtext");
+  const btnA = $("btn-a"),           btnB = $("btn-b");
+  const labelA = $("label-a"),       labelB = $("label-b");
+  const hintA = $("hint-a"),         hintB = $("hint-b");
+  const clearBtn = $("clear");
+
   const LS_KEY = "bhasha-bridge-langs";
+  const MIN_REC_MS = 350;        // a tap-tap this fast never carries speech
+  const MIN_BLOB_BYTES = 1200;
+
+  let LANGS = {};                // code -> { name, native }
+  let rec = null;                // "a" | "b" | null — who is recording
+  let busy = false;              // a turn is in flight
+  let booting = true;
+  let turnCount = 0;
 
   const player = new Audio();
   let audioUnlocked = false;
+  let micStream = null;
   let mediaRecorder = null;
   let chunks = [];
-  let activeSide = null;   // "a" | "b"
-  let busy = false;
-  let LANGS = {};          // code -> {name, native}
+  let recStartAt = 0;
+  let sendSide = null;
 
-  function nameOf(code) {
-    const l = LANGS[code];
-    return l ? l.native : code;
+  // ---- rendering ---------------------------------------------------------
+  function paint() {
+    const A = LANGS[selA.value] || { name: "—", native: "" };
+    const B = LANGS[selB.value] || { name: "—", native: "" };
+    nameA.textContent = A.name;  nativeA.textContent = A.native;
+    nameB.textContent = B.name;  nativeB.textContent = B.native;
+
+    const recA = rec === "a", recB = rec === "b";
+    btnA.classList.toggle("recording", recA);
+    btnB.classList.toggle("recording", recB);
+
+    labelA.textContent = recA ? "Release to send" : "Speak " + A.name;
+    labelB.textContent = recB ? "Release to send" : "Speak " + B.name;
+    hintA.textContent = recA ? "Listening…" : (busy ? "Please wait" : "Hold to talk");
+    hintB.textContent = recB ? "Listening…" : (busy ? "Please wait" : "Hold to talk");
+
+    // While one side is recording the other is locked out, so a stray tap
+    // can't hand the mic over mid-sentence.
+    btnA.disabled = booting || busy || recB;
+    btnB.disabled = booting || busy || recA;
+
+    const locked = booting || busy || !!rec;
+    selA.disabled = selB.disabled = swapBtn.disabled = locked;
+    pickerA.classList.toggle("is-disabled", locked);
+    pickerB.classList.toggle("is-disabled", locked);
+    clearBtn.disabled = busy || !!rec || turnCount === 0;
+
+    statusEl.textContent = booting
+      ? "Loading languages…"
+      : rec ? "Listening — release to send"
+      : busy ? "Working on it…"
+      : A.name + " ⇄ " + B.name;
+
+    translatingEl.hidden = !busy;
+    emptyEl.hidden = turnCount > 0 || busy;
   }
 
-  function setStatus(text, isError = false, animated = false) {
-    statusEl.className = isError ? "error" : "";
-    statusEl.innerHTML = animated ? text + ' <span class="dots"></span>' : text;
+  function showError(msg) {
+    errtextEl.textContent = msg;
+    errbarEl.hidden = false;
+    streamEl.scrollTop = streamEl.scrollHeight;
   }
-
-  function setBusy(state) {
-    busy = state;
-    btnA.disabled = state;
-    btnB.disabled = state;
-    selA.disabled = state;
-    selB.disabled = state;
-    swapBtn.disabled = state;
-  }
+  function clearError() { errbarEl.hidden = true; }
 
   function fail(msg) {
-    setStatus(msg, true);
-    setBusy(false);
-    btnA.classList.remove("recording");
-    btnB.classList.remove("recording");
-    holdSide = null;
-    activeSide = null;
+    rec = null;
+    busy = false;
+    paint();
+    showError(msg);
   }
 
-  function refreshLabels() {
-    const a = selA.value, b = selB.value;
-    btnA.querySelector(".lbl").textContent = "Speak " + nameOf(a);
-    btnB.querySelector(".lbl").textContent = "Speak " + nameOf(b);
-    btnA.querySelector("small").textContent = LANGS[a] ? LANGS[a].name + " → " + (LANGS[b] || {}).name : "";
-    btnB.querySelector("small").textContent = LANGS[b] ? LANGS[b].name + " → " + (LANGS[a] || {}).name : "";
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ a, b })); } catch (e) {}
+  // ---- language list -----------------------------------------------------
+  function populate(list) {
+    LANGS = {};
+    for (const l of list) LANGS[l.code] = { name: l.name, native: l.native };
+    countEl.textContent = String(list.length);
+
+    const frag = [];
+    for (const l of list) {
+      const o = document.createElement("option");
+      o.value = l.code;
+      o.textContent = l.native + " — " + l.name;
+      frag.push(o);
+    }
+    selA.replaceChildren(...frag.map((o) => o.cloneNode(true)));
+    selB.replaceChildren(...frag);
+
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
+    const codes = list.map((l) => l.code);
+    selA.value = (saved && codes.includes(saved.a))
+      ? saved.a
+      : (codes.includes("en-IN") ? "en-IN" : codes[0]);
+    selB.value = (saved && codes.includes(saved.b) && saved.b !== selA.value)
+      ? saved.b
+      : (codes.includes("hi-IN") && selA.value !== "hi-IN" ? "hi-IN" : codes.find((c) => c !== selA.value));
+    remember();
   }
 
-  // Keep the two selects from landing on the same language.
+  // The two sides must never land on the same language — the API rejects it.
   function enforceDistinct(changed) {
     if (selA.value !== selB.value) return;
     const other = changed === selA ? selB : selA;
@@ -245,51 +558,36 @@
     other.value = codes.find((c) => c !== changed.value) || codes[0];
   }
 
-  function populate(list) {
-    LANGS = {};
-    for (const { code, name, native } of list) LANGS[code] = { name, native };
-    const opts = list
-      .map((l) => `<option value="${l.code}">${l.native} — ${l.name}</option>`)
-      .join("");
-    selA.innerHTML = opts;
-    selB.innerHTML = opts;
-
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
-    const codes = list.map((l) => l.code);
-    selA.value = (saved && codes.includes(saved.a)) ? saved.a : (codes.includes("en-IN") ? "en-IN" : codes[0]);
-    selB.value = (saved && codes.includes(saved.b) && saved.b !== selA.value)
-      ? saved.b
-      : (codes.includes("hi-IN") && selA.value !== "hi-IN" ? "hi-IN" : codes.find((c) => c !== selA.value));
-    refreshLabels();
+  function remember() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ a: selA.value, b: selB.value })); } catch (e) {}
+    paint();
   }
 
-  selA.addEventListener("change", () => { enforceDistinct(selA); refreshLabels(); });
-  selB.addEventListener("change", () => { enforceDistinct(selB); refreshLabels(); });
+  selA.addEventListener("change", () => { enforceDistinct(selA); remember(); });
+  selB.addEventListener("change", () => { enforceDistinct(selB); remember(); });
   swapBtn.addEventListener("click", () => {
-    if (busy) return;
+    if (busy || rec) return;
     const t = selA.value; selA.value = selB.value; selB.value = t;
-    refreshLabels();
+    remember();
   });
 
+  // ---- audio -------------------------------------------------------------
+  // iOS only plays an <audio> element that was first touched inside a user
+  // gesture, so prime it on the first tap.
   function unlockAudio() {
     if (audioUnlocked) return;
-    player.src =
-      "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAA//uQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAw";
+    player.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAA//uQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAw";
     player.play().catch(() => {});
     player.pause();
     player.currentTime = 0;
     audioUnlocked = true;
   }
 
-  // ---- Hold-to-talk ------------------------------------------------------
-  // Hold a button to record, release (anywhere) to send. The mic stream is
-  // acquired once and kept, so every turn after the first re-arms instantly.
-  let holdSide = null;    // button currently held
-  let sendSide = null;    // side the in-flight turn belongs to
-  let micStream = null;
-  let recStartAt = 0;
-  const MIN_HOLD_MS = 350;
+  function playAudio(b64) {
+    if (!b64) return;
+    player.src = "data:audio/mp3;base64," + b64;
+    player.play().catch(() => showError("Tap Play again to hear it."));
+  }
 
   async function getMicStream() {
     if (micStream && micStream.active) return micStream;
@@ -304,74 +602,61 @@
     return "";
   }
 
-  function armUI(side) {
-    (side === "a" ? btnA : btnB).classList.add("recording");
-    (side === "a" ? btnB : btnA).disabled = true;
-    selA.disabled = selB.disabled = swapBtn.disabled = true;
-  }
-
-  function resetIdle() {
-    btnA.classList.remove("recording");
-    btnB.classList.remove("recording");
-    btnA.disabled = btnB.disabled = false;
-    selA.disabled = selB.disabled = swapBtn.disabled = false;
-    holdSide = null;
-    activeSide = null;
-  }
-
+  // ---- hold to talk, release to send -------------------------------------
+  // The mic stream is acquired once and kept, so every turn after the first
+  // re-arms instantly instead of re-prompting.
   async function beginHold(side, ev) {
     if (ev && ev.cancelable) ev.preventDefault();
-    if (busy || holdSide || activeSide) return;
+    if (busy || rec) return;           // in flight, or the other side is holding
+    clearError();
+
     unlockAudio();
-    holdSide = side;
-    armUI(side);
-    setStatus("Recording… release to translate");
+    rec = side;
+    paint();
 
     let stream;
     try {
       stream = await getMicStream();
     } catch (e) {
-      holdSide = null;
-      resetIdle();
       return fail("Allow microphone access, then reload the page.");
     }
-    if (holdSide !== side) return;   // released before the mic was ready
+    if (rec !== side) return;          // released before the mic was ready
 
     chunks = [];
     const mime = pickMime();
-    mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    try {
+      mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    } catch (e) {
+      return fail("This browser can't record audio here.");
+    }
     mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     mediaRecorder.onstop = onRecStop;
     recStartAt = Date.now();
     mediaRecorder.start();
-    activeSide = side;
   }
 
   function endHold(ev) {
-    if (!holdSide) return;
+    if (!rec) return;
     if (ev && ev.cancelable) ev.preventDefault();
-    sendSide = holdSide;
-    holdSide = null;
+    sendSide = rec;
+    rec = null;
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();               // -> onRecStop
+      mediaRecorder.stop();            // -> onRecStop
     } else {
-      resetIdle();
-      setStatus("Hold the button while you speak");
+      paint();                         // mic never started; nothing to send
     }
   }
 
   function onRecStop() {
-    btnA.classList.remove("recording");
-    btnB.classList.remove("recording");
     const type = (mediaRecorder && mediaRecorder.mimeType) || pickMime() || "audio/webm";
     const blob = new Blob(chunks, { type });
-    if (Date.now() - recStartAt < MIN_HOLD_MS || blob.size < 1200) {
-      resetIdle();
-      setStatus("Hold a little longer and speak");
+    if (Date.now() - recStartAt < MIN_REC_MS || blob.size < MIN_BLOB_BYTES) {
+      paint();
+      showError("Hold a little longer and speak.");
       return;
     }
-    setStatus("Translating", false, true);
-    setBusy(true);
+    busy = true;
+    paint();
     sendTurn(blob, sendSide);
   }
 
@@ -380,7 +665,7 @@
     const target_lang = side === "a" ? selB.value : selA.value;
     const ext = blob.type.includes("mp4") ? "m4a" : "webm";
     const fd = new FormData();
-    fd.append("audio", blob, `turn.${ext}`);
+    fd.append("audio", blob, "turn." + ext);
     fd.append("source_lang", source_lang);
     fd.append("target_lang", target_lang);
 
@@ -389,53 +674,66 @@
 
       if (res.status === 422) {
         const j = await res.json().catch(() => ({}));
-        return fail(
-          j.error === "no_speech"
-            ? "Didn't catch that — hold and speak a short phrase."
-            : "Translation failed. Hold to try again."
-        );
+        return fail(j.error === "no_speech"
+          ? "Didn't catch that — hold and speak a short phrase."
+          : "Translation failed. Hold to try again.");
       }
       if (!res.ok) return fail("Server problem. Hold to try again.");
 
       const data = await res.json();
+      busy = false;
       appendTurn(side, source_lang, target_lang, data.source_text, data.translated_text, data.audio_base64);
+      paint();
       playAudio(data.audio_base64);
-      resetIdle();
-      setBusy(false);
-      setStatus("Ready — hold a button to reply");
     } catch (e) {
-      fail("No connection. Try again.");
+      fail("No connection. Hold to try again.");
     }
   }
 
+  // ---- conversation log --------------------------------------------------
   function appendTurn(side, src, tgt, srcText, dstText, b64) {
-    const empty = logEl.querySelector(".empty");
-    if (empty) empty.remove();
-
+    const isA = side === "a";
     const el = document.createElement("div");
-    el.className = "turn " + (side === "a" ? "from-a" : "from-b");
-    el.innerHTML = `
-      <div class="tag">
-        <span>${nameOf(src)} → ${nameOf(tgt)}</span>
-        <button class="replay" type="button">▶ replay</button>
-      </div>
-      <div class="src"></div>
-      <div class="dst"></div>`;
-    el.querySelector(".src").textContent = srcText || "—";
-    el.querySelector(".dst").textContent = dstText || "—";
-    el.querySelector(".replay").addEventListener("click", () => playAudio(b64));
-    logEl.appendChild(el);
-    logEl.scrollTop = logEl.scrollHeight;
+    el.className = "turn " + (isA ? "from-a" : "from-b");
+    el.innerHTML =
+      '<div class="turn-head">' +
+        '<span class="turn-dot"></span>' +
+        '<span class="turn-meta"></span>' +
+      "</div>" +
+      '<div class="bubble-src"></div>' +
+      '<div class="bubble-dst">' +
+        '<div class="dst-text"></div>' +
+        '<div class="dst-actions">' +
+          '<button class="play" type="button">&#9654; Play again</button>' +
+          '<span class="eq"><i></i><i></i><i></i><i></i><i></i></span>' +
+        "</div>" +
+      "</div>";
+
+    const nameOf = (c) => (LANGS[c] ? LANGS[c].name : c);
+    el.querySelector(".turn-meta").textContent =
+      (isA ? "Person A" : "Person B") + " · " + nameOf(src) + " → " + nameOf(tgt);
+    el.querySelector(".bubble-src").textContent = srcText || "—";
+    el.querySelector(".dst-text").textContent = dstText || "—";
+    el.querySelector(".play").addEventListener("click", () => playAudio(b64));
+
+    streamEl.insertBefore(el, translatingEl);
+    turnCount++;
+    streamEl.scrollTop = streamEl.scrollHeight;
   }
 
-  function playAudio(b64) {
-    if (!b64) return;
-    player.src = "data:audio/mp3;base64," + b64;
-    player.play().catch(() => setStatus("Tap ▶ replay to hear it"));
-  }
+  clearBtn.addEventListener("click", () => {
+    if (busy || rec) return;
+    for (const el of streamEl.querySelectorAll(".turn")) el.remove();
+    turnCount = 0;
+    rec = null;
+    clearError();
+    paint();
+  });
 
   for (const [side, btn] of [["a", btnA], ["b", btnB]]) {
     btn.addEventListener("pointerdown", (e) => {
+      // Capture the pointer so a finger that slides off the button still
+      // delivers the pointerup that ends the turn.
       if (btn.setPointerCapture) { try { btn.setPointerCapture(e.pointerId); } catch (_) {} }
       beginHold(side, e);
     });
@@ -443,27 +741,37 @@
     btn.addEventListener("pointercancel", endHold);
     btn.addEventListener("contextmenu", (e) => e.preventDefault());
   }
-  // Safety net: a release that somehow lands off the button still ends the turn.
-  window.addEventListener("pointerup", (e) => { if (holdSide) endHold(e); });
-  window.addEventListener("blur", () => { if (holdSide) endHold(); });
+  // Safety nets: a release that lands off the button, or the tab losing focus
+  // mid-hold, still ends the turn rather than recording forever.
+  window.addEventListener("pointerup", (e) => { if (rec) endHold(e); });
+  window.addEventListener("blur", () => { if (rec) endHold(); });
+
   window.addEventListener("pagehide", () => {
     if (micStream) micStream.getTracks().forEach((t) => t.stop());
   });
 
-  // Boot: feature-check, then load the language list from the server.
+  // ---- boot --------------------------------------------------------------
+  paint();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-    setStatus("This browser can't record audio. Open in Chrome or Safari.", true);
-    return;
+    booting = false;
+    paint();
+    btnA.disabled = btnB.disabled = true;
+    return showError("This browser can't record audio. Open in Chrome or Safari.");
   }
+
   fetch("/api/languages")
     .then((r) => r.json())
     .then((d) => {
       populate(d.languages);
-      btnA.disabled = false;
-      btnB.disabled = false;
-      setStatus("Ready");
+      booting = false;
+      paint();
     })
-    .catch(() => setStatus("Couldn't load languages. Reload the page.", true));
+    .catch(() => {
+      booting = false;
+      paint();
+      btnA.disabled = btnB.disabled = true;
+      showError("Couldn't load languages. Reload the page.");
+    });
 })();
 </script>
 </body>
