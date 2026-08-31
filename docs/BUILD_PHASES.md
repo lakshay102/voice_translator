@@ -87,7 +87,7 @@ returns `{source_text, translated_text, audio_base64}`. Validation: `same_langua
 ## Hour 5.5 – 6.5 · Polish for the demo
 
 - [ ] UI looks *intentional* — consistent spacing, readable fonts, the two accent colours doing real work. Not fancy, not a raw API tester.
-- [x] On-page description line references the neighbour / delivery-guy story.
+- [x] On-page description line states what the product does in one sentence.
 - [ ] Record a **15–20 s phone/screen video**: pick a pair → button tap → voice in → translated voice out, repeated once (ideally show switching the language once).
 - [ ] Draft the post (see Sharing).
 
@@ -126,11 +126,11 @@ Mobile browsers block `navigator.mediaDevices.getUserMedia` on non-HTTPS origins
 
 ## Buffer · Sharing plan
 
-- **Lead with the story, not the tech:** the neighbour, the delivery guy, the moment of confusion.
-- **Video > code screenshots.** ~15–20 s: pick a pair, tap → voice → translated voice, once each way.
-- **State the honest scope:** "11 Indian languages, turn-based, built in a day." The constraint earns respect and the picker invites "add my language / my dialect" comments — that's the growth loop.
+- **Lead with the use case, not the tech:** two people, no shared language, a short exchange that needs to just work.
+- **Video > code screenshots.** ~15–20 s: pick a pair, hold to talk → voice → translated voice, once each way.
+- **State the scope plainly:** "11 Indian languages, turn-based voice interpretation." The language picker is the obvious extension point for wider coverage.
 - Post copy draft:
-  > Built this after my neighbour couldn't understand his Zomato delivery guy. A live voice interpreter for 11 Indian languages — pick two, talk, and it speaks back in the other. Turn-based, no app install, built in a day. Video below.
+  > Bhasha Bridge — a turn-based voice interpreter for 11 Indian languages. Pick two languages, hold to talk, and it speaks back in the other. No app install. Video below.
 
 ---
 

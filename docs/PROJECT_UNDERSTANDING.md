@@ -1,14 +1,15 @@
 # Bhasha Bridge — Project Understanding
 
-## The story (this leads everything, including the social post)
+## The problem
 
-A neighbour couldn't communicate with his Zomato-style delivery guy — one speaks
-Tamil, the other Hindi. There's a real moment of confusion at a doorstep that a
-phone could solve in ten seconds. **Bhasha Bridge** is a turn-based voice
-interpreter for exactly that moment: pick two languages, speak into your phone,
-hear it back in the other language.
+Two people who don't share a language still need to get through short,
+practical exchanges — a delivery, a booking, directions, a quick question.
+Full translation apps are heavy for this: they assume typing, a shared screen,
+or a back-and-forth chat UI.
 
-Tamil ↔ Hindi is just the default. The picker covers **11 Indian languages**.
+**Bhasha Bridge** is a turn-based voice interpreter for that moment: pick two
+languages, speak into your phone, hear it back in the other language. Tamil ↔
+Hindi is the default pair; the picker covers **11 Indian languages**.
 
 ## What "done" looks like by tomorrow
 
@@ -89,9 +90,9 @@ on a couple of non-English pairs.
 - `.claude/skills/voice-interpreter-frontend` — the single-page UI, dropdowns + swap,
   MediaRecorder capture, base64 playback, mobile quirks.
 
-## Definition of success for the *share*, not just the code
+## Definition of success for the demo, not just the code
 
-A ~15–20 second video: pick a pair, button tap → voice in → translated voice out,
-repeated once. The story in the caption. Honest scope stated ("11 Indian languages,
-built in a day"). That post is the actual deliverable; pretty code is secondary.
-The picker also invites "add my language" comments — the organic growth loop.
+A ~15–20 second walkthrough: pick a pair, hold to talk → voice in → translated
+voice out, repeated once. Scope stated plainly ("11 Indian languages, turn-based
+voice interpretation"). The language picker is the obvious extension point for
+future coverage.

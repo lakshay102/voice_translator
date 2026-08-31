@@ -13,7 +13,7 @@ HTML/JS, no build step, one `static/index.html`.
 
 ## Layout (top to bottom)
 
-1. **Title + one-line story** — the neighbour / delivery-guy line.
+1. **Title + one-line description** — what the product does, in a single sentence.
 2. **Two `<select>` dropdowns** — "Person A speaks" / "Person B speaks" — with a **⇄ swap**
    button between them. Populated from `GET /api/languages` on load. Options show
    `native — English` (e.g. `தமிழ் — Tamil`).
